@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Ambientes
+.venv/
+venv/
+.env
+
+# Banco local / SQLite de teste
+*.db
+*.sqlite3
+
+# Ferramentas / IDE
+.idea/
+.vscode/
+*.log
