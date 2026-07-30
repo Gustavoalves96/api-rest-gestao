@@ -3,13 +3,16 @@
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import { useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { CopyButton } from "@/components/copy-button";
+import { simularPagamento } from "@/lib/api/dev";
 import { criarCobranca } from "@/lib/api/pagamentos";
 import { usePagamento } from "@/hooks/usePagamento";
 import { type PagamentoState, toPagamentoState } from "@/lib/pagamento-state";
 import { formatBRL } from "@/lib/money";
+
+const EM_DEV = process.env.NODE_ENV !== "production";
 
 export function PixCheckout({ token, pedidoId }: { token: string; pedidoId: number }) {
   // Garante a cobrança uma vez (o backend é idempotente: reaproveita a vigente).
@@ -25,6 +28,12 @@ export function PixCheckout({ token, pedidoId }: { token: string; pedidoId: numb
 
   const consulta = usePagamento(token, pedidoId, cobranca.isSuccess);
   const pagamento = consulta.data ?? cobranca.data;
+
+  const queryClient = useQueryClient();
+  const simular = useMutation({
+    mutationFn: () => simularPagamento(token, pedidoId, "confirmar"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pagamento", pedidoId] }),
+  });
 
   if (cobranca.isError) {
     return <p className="text-red-600">Não foi possível gerar a cobrança deste pedido.</p>;
@@ -42,6 +51,20 @@ export function PixCheckout({ token, pedidoId }: { token: string; pedidoId: numb
         <span className="text-lg font-semibold">{formatBRL(pagamento.valor)}</span>
       </div>
       <EstadoPagamento estado={estado} />
+
+      {EM_DEV && estado.status === "pendente" && (
+        <div className="mt-6 border-t border-dashed border-black/15 pt-4 dark:border-white/20">
+          <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Ferramenta de dev</p>
+          <button
+            type="button"
+            onClick={() => simular.mutate()}
+            disabled={simular.isPending}
+            className="w-full rounded-md border border-emerald-600 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-400 dark:hover:bg-emerald-950"
+          >
+            {simular.isPending ? "Simulando…" : "Simular pagamento confirmado"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
