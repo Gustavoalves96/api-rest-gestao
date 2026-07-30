@@ -18,5 +18,6 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
 
-# Usa $PORT quando o host define (ex.: Render); cai para 8000 localmente.
-CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Aplica as migrations (idempotente) e sobe a API. Usa $PORT quando o host
+# define (ex.: Render); cai para 8000 localmente.
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

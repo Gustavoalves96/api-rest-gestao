@@ -65,11 +65,9 @@ Há um `render.yaml` na raiz (Blueprint), então o jeito mais simples é:
 
    (`PAYMENT_GATEWAY=fake` já vem do Blueprint.)
 3. Clique em **Apply/Deploy** e aguarde o build da imagem Docker.
-4. **Rode as migrations** (uma vez, e sempre que o schema mudar): abra o
-   serviço → aba **Shell** e execute:
-   ```bash
-   uv run alembic upgrade head
-   ```
+4. As **migrations rodam automaticamente** no start do container (o `CMD` do
+   Dockerfile executa `alembic upgrade head` antes de subir a API). Não é
+   preciso Shell — ideal para o free tier.
 5. Confirme a saúde: abra `https://SEU-SERVICO.onrender.com/health` → deve
    responder `{"status":"ok"}`. A doc fica em `/docs`.
 
