@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Origens permitidas para o frontend (CORS). Em produção, restrinja ao domínio real.
+    cors_origins: list[str] = ["http://localhost:3000"]
+
     # Gateway de pagamento. "fake" usa a implementação em memória; a app nunca
     # conhece o gateway concreto diretamente, só a interface PaymentGateway.
     payment_gateway: str = "fake"

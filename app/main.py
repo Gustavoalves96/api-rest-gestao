@@ -1,12 +1,24 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import get_settings
 from app.exceptions import registrar_exception_handlers
 from app.routers import auth, pedidos, produtos, webhooks
 
+settings = get_settings()
+
 app = FastAPI(
-    title="API de Gestão de Estoque e Pedidos",
-    description="API REST para gestão de estoque e pedidos (domínio ERP).",
+    title="API de Gestão de Estoque, Pedidos e Pagamentos",
+    description="API REST para gestão de estoque, pedidos e pagamentos Pix.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 registrar_exception_handlers(app)
