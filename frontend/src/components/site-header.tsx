@@ -23,6 +23,9 @@ export function SiteHeader() {
                 <Link href="/pedidos" className="hover:underline">
                   Meus pedidos
                 </Link>
+                <Link href="/admin/produtos" className="hover:underline">
+                  Admin
+                </Link>
                 <button
                   type="button"
                   onClick={sair}
