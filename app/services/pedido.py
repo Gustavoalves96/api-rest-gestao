@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from app.exceptions import RecursoNaoEncontradoError
+from app.exceptions import EstoqueInsuficienteError, RecursoNaoEncontradoError
 from app.models import ItemPedido, Pedido, StatusPedido
 from app.repositories.pedido import PedidoRepository
 from app.repositories.produto import ProdutoRepository
@@ -17,9 +17,11 @@ class PedidoService:
         self.produtos = produto_repository
 
     async def criar(self, usuario_id: int, dados: PedidoCreate) -> Pedido:
-        # A criação NÃO mexe no estoque — a baixa acontece só na confirmação do
-        # pagamento (ver payment_service). Aqui apenas montamos o pedido e
-        # congelamos o preço praticado de cada item.
+        # A criação NÃO abate o estoque — a baixa autoritativa acontece só na
+        # confirmação do pagamento (ver payment_service). Mas fazemos uma
+        # verificação de disponibilidade aqui para não aceitar pedidos que já
+        # nascem impossíveis. Não é reserva: dois pedidos podem passar por esta
+        # checagem, e a concorrência é resolvida na confirmação.
         pedido = Pedido(usuario_id=usuario_id, status=StatusPedido.PENDENTE)
         total = 0
 
@@ -28,6 +30,11 @@ class PedidoService:
             if produto is None or not produto.ativo:
                 raise RecursoNaoEncontradoError(
                     f"Produto {item.produto_id} não encontrado ou inativo."
+                )
+            if produto.quantidade_estoque < item.quantidade:
+                raise EstoqueInsuficienteError(
+                    f"Estoque insuficiente para o produto {produto.sku}: "
+                    f"disponível {produto.quantidade_estoque}, solicitado {item.quantidade}."
                 )
             pedido.itens.append(
                 ItemPedido(

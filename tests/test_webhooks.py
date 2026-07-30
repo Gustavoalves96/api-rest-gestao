@@ -66,9 +66,17 @@ async def test_webhook_duplicado_processa_uma_vez(
 async def test_webhook_estoque_insuficiente_reverte_tudo(
     client: AsyncClient, auth_headers: dict[str, str], gateway: FakeGateway
 ) -> None:
-    # Pedido de 5 unidades com estoque 2: a confirmação deve reverter por completo.
-    produto_id, charge_id = await _preparar_cobranca(client, auth_headers, estoque=2, quantidade=5)
-    pedido_id = (await client.get("/pedidos", headers=auth_headers)).json()[0]["id"]
+    # Cenário de concorrência: o pedido nasce válido (5 de 5), mas o estoque cai
+    # para 2 antes da confirmação (venda por outro canal). A confirmação deve
+    # reverter por completo — este é o papel da checagem na confirmação.
+    produto_id = await criar_produto(client, auth_headers, "WH", estoque=5, preco=1000)
+    pedido_id = await criar_pedido(client, auth_headers, produto_id, 5)
+    cobranca = await criar_cobranca(client, auth_headers, pedido_id)
+    charge_id = cobranca["external_id"]
+
+    await client.patch(
+        f"/produtos/{produto_id}", json={"quantidade_estoque": 2}, headers=auth_headers
+    )
     gateway.marcar_pago(charge_id)
 
     resposta = await client.post(
@@ -79,7 +87,7 @@ async def test_webhook_estoque_insuficiente_reverte_tudo(
     assert resposta.status_code == 200  # webhook responde 200 mesmo com falha de processamento
 
     produto = await client.get(f"/produtos/{produto_id}")
-    assert produto.json()["quantidade_estoque"] == 2  # inalterado
+    assert produto.json()["quantidade_estoque"] == 2  # inalterado (rollback)
 
     pedido = await client.get(f"/pedidos/{pedido_id}", headers=auth_headers)
     assert pedido.json()["status"] == "pendente"  # não foi marcado como pago

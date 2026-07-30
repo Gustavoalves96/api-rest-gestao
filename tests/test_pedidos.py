@@ -33,17 +33,22 @@ async def test_criar_pedido_nao_mexe_no_estoque(
     assert produto.json()["quantidade_estoque"] == 10  # inalterado
 
 
-async def test_pedido_pode_exceder_estoque_na_criacao(
+async def test_pedido_rejeita_quantidade_acima_do_estoque(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    # Criar pedido acima do estoque é permitido; a validação vem na confirmação.
+    # A criação recusa pedido acima do estoque disponível (verificação de
+    # disponibilidade, sem reservar).
     produto_id = await _criar_produto(client, auth_headers, "P-2", estoque=2, preco=1000)
     resposta = await client.post(
         "/pedidos",
         json={"itens": [{"produto_id": produto_id, "quantidade": 5}]},
         headers=auth_headers,
     )
-    assert resposta.status_code == 201
+    assert resposta.status_code == 409
+
+    # O estoque não foi alterado.
+    produto = await client.get(f"/produtos/{produto_id}")
+    assert produto.json()["quantidade_estoque"] == 2
 
 
 async def test_pedido_com_produto_inexistente(
