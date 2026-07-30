@@ -1,8 +1,9 @@
-<h1 align="center">API REST — Gestão de Estoque e Pedidos</h1>
+<h1 align="center">API REST — Gestão de Estoque, Pedidos e Pagamentos</h1>
 
 <p align="center">
-  API REST de domínio ERP para gestão de <strong>estoque</strong> e <strong>pedidos</strong>,
-  com autenticação JWT, arquitetura em camadas e testes automatizados.
+  API REST (domínio ERP / marketplace) para gestão de <strong>estoque</strong>,
+  <strong>pedidos</strong> e <strong>pagamentos Pix</strong>, com autenticação JWT,
+  integração com gateway abstraído, webhooks idempotentes e testes automatizados.
 </p>
 
 <p align="center">
@@ -38,15 +39,38 @@ para produção: camadas bem separadas, autenticação, validação de entrada, 
 negócio isoladas em uma camada de serviço, migrations versionadas e testes cobrindo
 caminho feliz e cenários de erro.
 
-O domínio é um mini-ERP: usuários autenticados cadastram **produtos** (com controle
-de estoque) e criam **pedidos**, que dão baixa no estoque de forma atômica.
+O domínio: usuários autenticados cadastram **produtos** (com controle de estoque),
+criam **pedidos** e pagam via **Pix**. O estoque só é abatido quando o pagamento é
+**confirmado pelo gateway** (via webhook), na mesma transação — nunca na criação do
+pedido.
+
+### Fluxo do pagamento
+
+```
+pedido criado (PENDENTE)
+      │
+      ▼
+cobrança Pix gerada no gateway  ──►  QR Code + copia-e-cola
+      │
+      ▼
+webhook do gateway  ──►  assinatura validada  ──►  evento registrado (idempotente)
+      │
+      ▼
+pagamento CONFIRMADO + baixa de estoque, na MESMA transação
+```
 
 ## Funcionalidades
 
 - 🔐 **Autenticação JWT** — registro e login, com senhas protegidas por hash bcrypt.
-- 📦 **Produtos** — CRUD com SKU único, preço e controle de estoque.
-- 🧾 **Pedidos** — criação com **baixa de estoque transacional**, preço registrado no
-  momento da compra e cancelamento que devolve o estoque.
+- 📦 **Produtos** — CRUD com SKU único, preço (em centavos) e controle de estoque.
+- 🧾 **Pedidos** — preço congelado no momento da compra; criação **não** mexe no estoque.
+- 💸 **Pagamentos Pix** — cobrança com QR Code e copia-e-cola, gateway **abstraído**
+  por trás de um `Protocol` (implementação `fake` em memória; Asaas fica plugável).
+- 🔁 **Máquina de estados** de pagamento (`PENDENTE → CONFIRMADO/FALHOU/EXPIRADO`,
+  `CONFIRMADO → ESTORNADO`) com transições validadas explicitamente.
+- 📥 **Webhooks** com validação de assinatura, idempotência (`external_event_id` único),
+  registro do payload cru e baixa de estoque **atômica** na confirmação.
+- 💰 **Dinheiro em centavos** (`int`) em toda a stack — nunca `float`.
 - 🧱 **Arquitetura em camadas** — `router → service → repository → model`.
 - ⚠️ **Erros de domínio** convertidos em respostas HTTP consistentes.
 - 🗃️ **Migrations** versionadas com Alembic.
@@ -65,6 +89,7 @@ de estoque) e criam **pedidos**, que dão baixa no estoque de forma atômica.
 | Banco de dados     | PostgreSQL (asyncpg)                                   |
 | Migrations         | Alembic                                                |
 | Autenticação       | JWT (PyJWT) + bcrypt                                    |
+| Gateway de pagamento | Abstraído por `Protocol` (impl. `fake`; Asaas plugável) |
 | Testes             | pytest + httpx                                          |
 | Lint/Formatação    | ruff                                                   |
 | Dependências/Env   | uv                                                     |
@@ -86,7 +111,7 @@ O fluxo de uma requisição percorre camadas com responsabilidades bem definidas
 ```
 
 - **router** — só HTTP: validação de entrada, código de status e serialização da resposta.
-- **service** — regra de negócio (ex.: validar estoque e dar baixa ao criar um pedido).
+- **service** — regra de negócio (ex.: confirmar pagamento e dar baixa no estoque).
 - **repository** — acesso a dados; todas as queries ficam isoladas aqui.
 - **model** — mapeamento SQLAlchemy das tabelas.
 
@@ -134,9 +159,14 @@ uv run uvicorn app.main:app --reload   # sobe a API em http://localhost:8000
 | `DELETE` | `/produtos/{id}`            |      🔒      | Remove um produto                      |
 | `GET`    | `/pedidos`                  |      🔒      | Lista os pedidos do usuário            |
 | `GET`    | `/pedidos/{id}`             |      🔒      | Detalha um pedido                      |
-| `POST`   | `/pedidos`                  |      🔒      | Cria um pedido (dá baixa no estoque)   |
-| `POST`   | `/pedidos/{id}/cancelar`    |      🔒      | Cancela o pedido e devolve o estoque   |
+| `POST`   | `/pedidos`                  |      🔒      | Cria um pedido (não mexe no estoque)   |
+| `POST`   | `/pedidos/{id}/pagamento`   |      🔒      | Gera a cobrança Pix (QR + copia-e-cola) |
+| `GET`    | `/pedidos/{id}/pagamento`   |      🔒      | Consulta o status da cobrança          |
+| `POST`   | `/pedidos/{id}/cancelar`    |      🔒      | Cancela/estorna e devolve o estoque    |
+| `POST`   | `/webhooks/pagamentos`      |   assinatura | Recebido **pelo gateway** (não pelo cliente) |
 | `GET`    | `/health`                   |      —       | Health check                           |
+
+> Valores monetários trafegam sempre como inteiros em **centavos** (ex.: `19990` = R$ 199,90).
 
 ### Exemplo rápido
 
@@ -149,15 +179,20 @@ curl -X POST localhost:8000/auth/register \
 TOKEN=$(curl -s -X POST localhost:8000/auth/login \
   -d "username=user@example.com&password=senha-forte-123" | jq -r .access_token)
 
-# 2. Criar um produto
+# 2. Criar um produto (preço em centavos)
 curl -X POST localhost:8000/produtos \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"sku":"SKU-001","nome":"Teclado","preco":"199.90","quantidade_estoque":10}'
+  -d '{"sku":"SKU-001","nome":"Teclado","preco":19990,"quantidade_estoque":10}'
 
-# 3. Criar um pedido (baixa o estoque)
+# 3. Criar um pedido (ainda não baixa o estoque)
 curl -X POST localhost:8000/pedidos \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"itens":[{"produto_id":1,"quantidade":3}]}'
+
+# 4. Gerar a cobrança Pix — retorna QR Code e copia-e-cola
+curl -X POST localhost:8000/pedidos/1/pagamento -H "Authorization: Bearer $TOKEN"
+
+# O estoque só é baixado quando o gateway confirma o pagamento via webhook.
 ```
 
 ## Testes e qualidade
@@ -167,9 +202,11 @@ uv run ruff check .    # lint
 uv run pytest          # testes
 ```
 
-Os testes usam um banco **SQLite isolado**, criado e destruído a cada teste — não
-tocam no banco de desenvolvimento. A suíte cobre autenticação, CRUD de produtos e o
-fluxo de pedidos (baixa de estoque, estoque insuficiente, cancelamento).
+Os testes usam um banco **SQLite isolado** e um **gateway fake em memória**, criados
+a cada teste — nunca tocam no banco de desenvolvimento nem em um gateway real. A suíte
+cobre autenticação, produtos, pedidos e pagamentos: webhook com assinatura inválida
+(`401`), webhook duplicado (processado uma única vez), confirmação com estoque
+insuficiente (transação revertida) e estorno que devolve o estoque.
 
 ## Estrutura do projeto
 
@@ -184,22 +221,34 @@ app/
 ├── schemas/           # schemas Pydantic (Create / Update / Read)
 ├── repositories/      # acesso a dados (queries isoladas)
 ├── services/          # regra de negócio
+│   ├── payment_service.py   # cobrança, confirmação, estorno, estados
+│   ├── webhook_service.py   # assinatura, idempotência, registro do evento
+│   └── gateways/            # abstração do gateway (base Protocol + fake)
 ├── routers/           # endpoints agrupados por recurso
+│   └── webhooks.py    # rotas chamadas PELO gateway
 └── auth/              # JWT, hashing e dependências de segurança
-tests/                 # testes de integração + fixtures
+tests/                 # testes de integração + fixtures (gateway fake)
 alembic/               # configuração e migrations
 ```
 
 ## Decisões de projeto
 
-- **Async de ponta a ponta** — endpoints e acesso a banco usam `async`/`AsyncSession`.
-- **Baixa de estoque atômica** — a criação do pedido e o abatimento do estoque ocorrem
-  na mesma transação; se o estoque for insuficiente, nada é alterado.
-- **Preço histórico** — o item do pedido guarda o preço praticado no momento da compra,
-  então reajustes futuros no produto não afetam pedidos passados.
-- **Banco de teste em SQLite** — mantém a suíte rápida e sem dependência externa,
-  enquanto o alvo de produção é PostgreSQL; os modelos são neutros de dialeto.
-- **Segredos por ambiente** — credenciais e chave JWT vêm de variáveis de ambiente;
+- **Async de ponta a ponta** — endpoints, acesso a banco e chamadas ao gateway são `async`.
+- **Baixa de estoque na confirmação** — o estoque só é abatido quando o pagamento é
+  confirmado pelo gateway, na mesma transação (com `SELECT ... FOR UPDATE` no pedido
+  para evitar baixa dupla por webhooks concorrentes). Criar o pedido não reserva estoque.
+- **Dinheiro em centavos** — todos os valores monetários são `int` em centavos, em toda
+  a stack; nunca `float`.
+- **Gateway abstraído** — a aplicação depende apenas do `Protocol PaymentGateway`. A
+  implementação concreta (ex.: Asaas) é resolvida por config e injetada por `Depends`;
+  os testes injetam um fake em memória.
+- **Webhooks defensivos** — assinatura validada antes de qualquer processamento, evento
+  cru registrado antes de processar, idempotência por `external_event_id` único e o
+  status/valor reais reconsultados no gateway (nunca confia no corpo do webhook).
+- **Preço histórico** — o item do pedido guarda o preço praticado no momento da compra.
+- **Banco de teste em SQLite** — suíte rápida e sem dependência externa; alvo de produção
+  é PostgreSQL, e os modelos são neutros de dialeto (`JSONB` no Postgres, `JSON` no SQLite).
+- **Segredos por ambiente** — chaves de API, segredo do webhook e JWT vêm do ambiente;
   o `.env` nunca é versionado.
 
 ## Licença
