@@ -14,6 +14,7 @@ from app.repositories.produto import ProdutoRepository
 from app.repositories.usuario import UsuarioRepository
 from app.services.gateways.base import PaymentGateway
 from app.services.gateways.fake import FakeGateway
+from app.services.gateways.http import HttpGateway
 from app.services.payment_service import PaymentService
 from app.services.pedido import PedidoService
 from app.services.produto import ProdutoService
@@ -45,6 +46,12 @@ def get_payment_gateway() -> PaymentGateway:
         return FakeGateway(
             webhook_secret=settings.webhook_secret,
             expira_minutos=settings.cobranca_expira_minutos,
+        )
+    if settings.payment_gateway == "http":
+        return HttpGateway(
+            base_url=settings.gateway_base_url,
+            api_key=settings.gateway_api_key,
+            webhook_token=settings.webhook_secret,
         )
     raise RuntimeError(f"Gateway de pagamento não suportado: {settings.payment_gateway!r}")
 

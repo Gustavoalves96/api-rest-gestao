@@ -54,6 +54,12 @@ class AssinaturaWebhookInvalidaError(DomainError):
     status_code = status.HTTP_401_UNAUTHORIZED
 
 
+class GatewayError(DomainError):
+    """Falha ao comunicar com o gateway de pagamento."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+
+
 class CredenciaisInvalidasError(DomainError):
     """Falha de autenticação (credenciais ou token inválidos)."""
 

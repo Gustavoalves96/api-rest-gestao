@@ -21,9 +21,11 @@ class Settings(BaseSettings):
     # Origens permitidas para o frontend (CORS). Em produção, restrinja ao domínio real.
     cors_origins: list[str] = ["http://localhost:3000"]
 
-    # Gateway de pagamento. "fake" usa a implementação em memória; a app nunca
-    # conhece o gateway concreto diretamente, só a interface PaymentGateway.
+    # Gateway de pagamento: "fake" (em memória) ou "http" (REST genérico via httpx).
+    # A app nunca conhece o gateway concreto diretamente, só a interface PaymentGateway.
     payment_gateway: str = "fake"
+    # URL base do gateway HTTP genérico (usada quando payment_gateway == "http").
+    gateway_base_url: str = "http://localhost:9000"
     # Chave de API do gateway — apenas via ambiente, nunca versionada nem logada.
     gateway_api_key: str = ""
     # Segredo compartilhado usado para validar a assinatura dos webhooks.
