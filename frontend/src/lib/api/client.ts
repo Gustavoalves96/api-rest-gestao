@@ -37,15 +37,7 @@ async function extrairDetalhe(res: Response): Promise<string> {
   return `Erro ${res.status}`;
 }
 
-/**
- * Faz a requisição e valida a resposta com o schema Zod fornecido. O app nunca
- * consome o JSON cru — só o tipo inferido do schema.
- */
-export async function apiFetch<T>(
-  path: string,
-  schema: z.ZodType<T>,
-  opts: FetchOptions = {},
-): Promise<T> {
+async function executar(path: string, opts: FetchOptions): Promise<Response> {
   const headers: Record<string, string> = {};
   let body: BodyInit | undefined;
 
@@ -69,7 +61,24 @@ export async function apiFetch<T>(
   if (!res.ok) {
     throw new ApiError(res.status, await extrairDetalhe(res));
   }
+  return res;
+}
 
+/**
+ * Faz a requisição e valida a resposta com o schema Zod fornecido. O app nunca
+ * consome o JSON cru — só o tipo inferido do schema.
+ */
+export async function apiFetch<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  opts: FetchOptions = {},
+): Promise<T> {
+  const res = await executar(path, opts);
   const data: unknown = await res.json();
   return schema.parse(data);
+}
+
+/** Variante para respostas sem corpo (ex.: 204 No Content). */
+export async function apiFetchVoid(path: string, opts: FetchOptions = {}): Promise<void> {
+  await executar(path, opts);
 }
