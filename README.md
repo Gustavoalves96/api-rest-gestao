@@ -265,6 +265,12 @@ cp .env.local.example .env.local     # aponta para a API
 npm run dev                          # http://localhost:3000
 ```
 
+## Deploy
+
+Guia passo a passo para publicar em **Vercel** (frontend) + **Render** (API, via
+Docker) + **Neon** (PostgreSQL) em [DEPLOY.md](DEPLOY.md). Há um `render.yaml`
+(Blueprint) na raiz que provisiona o serviço da API.
+
 ## Licença
 
 Distribuído sob a licença [MIT](LICENSE).

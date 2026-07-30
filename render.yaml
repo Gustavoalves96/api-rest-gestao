@@ -1,0 +1,23 @@
+# Blueprint da Render para a API (backend).
+# Frontend fica na Vercel; banco na Neon.
+services:
+  - type: web
+    name: api-gestao
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # Sem gateway real ainda: mantém o fake (o endpoint /dev de simulação
+      # continua disponível para confirmar pagamentos manualmente).
+      - key: PAYMENT_GATEWAY
+        value: fake
+      # Os valores abaixo são definidos no painel da Render (nunca versionados).
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

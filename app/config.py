@@ -1,6 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -18,8 +20,16 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
-    # Origens permitidas para o frontend (CORS). Em produção, restrinja ao domínio real.
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # Origens permitidas para o frontend (CORS). Aceita lista separada por vírgula
+    # no ambiente (ex.: CORS_ORIGINS=https://app.vercel.app,https://outro.com).
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_cors(cls, valor: object) -> object:
+        if isinstance(valor, str):
+            return [origem.strip() for origem in valor.split(",") if origem.strip()]
+        return valor
 
     # Gateway de pagamento: "fake" (em memória) ou "http" (REST genérico via httpx).
     # A app nunca conhece o gateway concreto diretamente, só a interface PaymentGateway.
