@@ -28,6 +28,12 @@ app.include_router(produtos.router)
 app.include_router(pedidos.router)
 app.include_router(webhooks.router)
 
+# Rotas de simulação só existem no modo fake (nunca com um gateway real).
+if settings.payment_gateway == "fake":
+    from app.routers import dev
+
+    app.include_router(dev.router)
+
 
 @app.get("/health", tags=["infra"])
 async def health() -> dict[str, str]:
