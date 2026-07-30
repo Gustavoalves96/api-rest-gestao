@@ -1,8 +1,7 @@
 import enum
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Numeric
+from sqlalchemy import Enum, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -31,7 +30,8 @@ class Pedido(Base, TimestampMixin):
         default=StatusPedido.PENDENTE,
         nullable=False,
     )
-    total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
+    # Total em centavos (int).
+    total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     itens: Mapped[list["ItemPedido"]] = relationship(
         back_populates="pedido",

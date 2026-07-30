@@ -1,7 +1,6 @@
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, Numeric
+from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -26,12 +25,13 @@ class ItemPedido(Base):
         nullable=False,
     )
     quantidade: Mapped[int] = mapped_column(Integer, nullable=False)
-    # Preço registrado no momento da compra (não muda se o produto reajustar depois).
-    preco_unitario: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # Preço unitário em centavos, registrado no momento da compra (não muda
+    # se o produto reajustar depois).
+    preco_unitario: Mapped[int] = mapped_column(Integer, nullable=False)
 
     pedido: Mapped["Pedido"] = relationship(back_populates="itens")
     produto: Mapped["Produto"] = relationship()
 
     @property
-    def subtotal(self) -> Decimal:
+    def subtotal(self) -> int:
         return self.preco_unitario * self.quantidade

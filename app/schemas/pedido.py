@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.pedido import StatusPedido
@@ -20,8 +18,9 @@ class ItemPedidoRead(BaseModel):
     id: int
     produto_id: int
     quantidade: int
-    preco_unitario: Decimal
-    subtotal: Decimal
+    # Valores em centavos.
+    preco_unitario: int
+    subtotal: int
 
 
 class PedidoRead(BaseModel):
@@ -30,5 +29,6 @@ class PedidoRead(BaseModel):
     id: int
     usuario_id: int
     status: StatusPedido
-    total: Decimal
+    # Total em centavos.
+    total: int
     itens: list[ItemPedidoRead]
