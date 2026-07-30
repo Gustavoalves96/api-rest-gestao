@@ -6,15 +6,24 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.database import get_session
+from app.dependencies import get_payment_gateway
 from app.main import app
 from app.models import Base
+from app.services.gateways.fake import FakeGateway
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+WEBHOOK_SECRET = "segredo-de-teste"
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
-    """Client HTTP com um banco SQLite em memória isolado por teste."""
+async def gateway() -> FakeGateway:
+    """Gateway fake isolado por teste (estado não vaza entre testes)."""
+    return FakeGateway(webhook_secret=WEBHOOK_SECRET, expira_minutos=30)
+
+
+@pytest_asyncio.fixture
+async def client(gateway: FakeGateway) -> AsyncGenerator[AsyncClient, None]:
+    """Client HTTP com banco SQLite em memória e gateway fake, por teste."""
     engine = create_async_engine(
         TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
@@ -30,6 +39,7 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_payment_gateway] = lambda: gateway
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

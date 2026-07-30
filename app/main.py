@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.exceptions import registrar_exception_handlers
-from app.routers import auth, pedidos, produtos
+from app.routers import auth, pedidos, produtos, webhooks
 
 app = FastAPI(
     title="API de Gestão de Estoque e Pedidos",
@@ -14,6 +14,7 @@ registrar_exception_handlers(app)
 app.include_router(auth.router)
 app.include_router(produtos.router)
 app.include_router(pedidos.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/health", tags=["infra"])

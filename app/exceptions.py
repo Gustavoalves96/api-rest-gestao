@@ -42,6 +42,18 @@ class RegraDeNegocioError(DomainError):
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+class TransicaoDeStatusInvalidaError(DomainError):
+    """Transição de status de pagamento não permitida pela máquina de estados."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+class AssinaturaWebhookInvalidaError(DomainError):
+    """Webhook recebido sem assinatura válida. Não deve ser processado."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+
+
 class CredenciaisInvalidasError(DomainError):
     """Falha de autenticação (credenciais ou token inválidos)."""
 

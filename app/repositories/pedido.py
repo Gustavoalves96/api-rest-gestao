@@ -15,6 +15,18 @@ class PedidoRepository:
     async def obter_por_id(self, pedido_id: int) -> Pedido | None:
         return await self.session.get(Pedido, pedido_id)
 
+    async def obter_para_atualizacao(self, pedido_id: int) -> Pedido | None:
+        """Lê o pedido com trava de linha (`SELECT ... FOR UPDATE`).
+
+        Usado ao confirmar pagamento: impede que dois webhooks do mesmo pedido
+        deem baixa de estoque em paralelo. No SQLite dos testes o lock é no-op,
+        mas a query permanece correta.
+        """
+        resultado = await self.session.execute(
+            select(Pedido).where(Pedido.id == pedido_id).with_for_update()
+        )
+        return resultado.scalar_one_or_none()
+
     async def listar_por_usuario(
         self, usuario_id: int, skip: int = 0, limit: int = 100
     ) -> Sequence[Pedido]:

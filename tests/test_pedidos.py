@@ -2,25 +2,21 @@ from httpx import AsyncClient
 
 
 async def _criar_produto(
-    client: AsyncClient, headers: dict[str, str], sku: str, estoque: int, preco: str
+    client: AsyncClient, headers: dict[str, str], sku: str, estoque: int, preco: int
 ) -> int:
     resposta = await client.post(
         "/produtos",
-        json={
-            "sku": sku,
-            "nome": f"Produto {sku}",
-            "preco": preco,
-            "quantidade_estoque": estoque,
-        },
+        json={"sku": sku, "nome": f"Produto {sku}", "preco": preco, "quantidade_estoque": estoque},
         headers=headers,
     )
     return resposta.json()["id"]
 
 
-async def test_criar_pedido_da_baixa_no_estoque(
+async def test_criar_pedido_nao_mexe_no_estoque(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    produto_id = await _criar_produto(client, auth_headers, "P-1", estoque=10, preco="50.00")
+    # A baixa de estoque só acontece na confirmação do pagamento.
+    produto_id = await _criar_produto(client, auth_headers, "P-1", estoque=10, preco=5000)
 
     resposta = await client.post(
         "/pedidos",
@@ -30,26 +26,24 @@ async def test_criar_pedido_da_baixa_no_estoque(
     assert resposta.status_code == 201
     corpo = resposta.json()
     assert corpo["status"] == "pendente"
-    assert corpo["total"] == "150.00"
-    assert corpo["itens"][0]["subtotal"] == "150.00"
+    assert corpo["total"] == 15000  # 3 x 5000 centavos
+    assert corpo["itens"][0]["subtotal"] == 15000
 
     produto = await client.get(f"/produtos/{produto_id}")
-    assert produto.json()["quantidade_estoque"] == 7
+    assert produto.json()["quantidade_estoque"] == 10  # inalterado
 
 
-async def test_estoque_insuficiente(client: AsyncClient, auth_headers: dict[str, str]) -> None:
-    produto_id = await _criar_produto(client, auth_headers, "P-2", estoque=2, preco="10.00")
-
+async def test_pedido_pode_exceder_estoque_na_criacao(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    # Criar pedido acima do estoque é permitido; a validação vem na confirmação.
+    produto_id = await _criar_produto(client, auth_headers, "P-2", estoque=2, preco=1000)
     resposta = await client.post(
         "/pedidos",
         json={"itens": [{"produto_id": produto_id, "quantidade": 5}]},
         headers=auth_headers,
     )
-    assert resposta.status_code == 409
-
-    # O estoque não pode ter sido alterado quando o pedido falha.
-    produto = await client.get(f"/produtos/{produto_id}")
-    assert produto.json()["quantidade_estoque"] == 2
+    assert resposta.status_code == 201
 
 
 async def test_pedido_com_produto_inexistente(
@@ -63,10 +57,11 @@ async def test_pedido_com_produto_inexistente(
     assert resposta.status_code == 404
 
 
-async def test_cancelar_pedido_devolve_estoque(
+async def test_cancelar_pedido_pendente_nao_devolve_estoque(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    produto_id = await _criar_produto(client, auth_headers, "P-3", estoque=10, preco="20.00")
+    # Pedido nunca pago não baixou estoque; cancelar não deve devolver nada.
+    produto_id = await _criar_produto(client, auth_headers, "P-3", estoque=10, preco=2000)
     pedido = await client.post(
         "/pedidos",
         json={"itens": [{"produto_id": produto_id, "quantidade": 4}]},
@@ -85,7 +80,7 @@ async def test_cancelar_pedido_devolve_estoque(
 async def test_cancelar_pedido_ja_cancelado(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    produto_id = await _criar_produto(client, auth_headers, "P-4", estoque=5, preco="20.00")
+    produto_id = await _criar_produto(client, auth_headers, "P-4", estoque=5, preco=2000)
     pedido = await client.post(
         "/pedidos",
         json={"itens": [{"produto_id": produto_id, "quantidade": 1}]},
