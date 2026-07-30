@@ -251,6 +251,20 @@ alembic/               # configuração e migrations
 - **Segredos por ambiente** — chaves de API, segredo do webhook e JWT vêm do ambiente;
   o `.env` nunca é versionado.
 
+## Frontend
+
+O repositório inclui um frontend **Next.js** (App Router, TypeScript `strict`) em
+[`frontend/`](frontend/) que consome esta API: catálogo de produtos, criação de pedidos
+e **checkout Pix** com QR Code, copia-e-cola e acompanhamento do status em tempo real
+(polling com backoff). Detalhes e comandos no [README do frontend](frontend/README.md).
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local     # aponta para a API
+npm run dev                          # http://localhost:3000
+```
+
 ## Licença
 
 Distribuído sob a licença [MIT](LICENSE).
