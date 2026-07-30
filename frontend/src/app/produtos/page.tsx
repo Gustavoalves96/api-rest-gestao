@@ -1,12 +1,11 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { criarPedido } from "@/lib/api/pedidos";
 import { listarProdutos } from "@/lib/api/produtos";
 import type { Produto } from "@/lib/api/schemas";
-import { useAuth } from "@/lib/auth/context";
+import { useCart } from "@/hooks/useCart";
 import { formatBRL } from "@/lib/money";
 
 export default function ProdutosPage() {
@@ -38,15 +37,22 @@ export default function ProdutosPage() {
 }
 
 function ProdutoCard({ produto }: { produto: Produto }) {
-  const router = useRouter();
-  const { token } = useAuth();
-
-  const comprar = useMutation({
-    mutationFn: () => criarPedido(token as string, [{ produtoId: produto.id, quantidade: 1 }]),
-    onSuccess: (pedido) => router.push(`/checkout/${pedido.id}`),
-  });
+  const { adicionar } = useCart();
+  const [adicionado, setAdicionado] = useState(false);
 
   const semEstoque = produto.quantidadeEstoque <= 0;
+
+  function aoAdicionar() {
+    adicionar({
+      produtoId: produto.id,
+      sku: produto.sku,
+      nome: produto.nome,
+      preco: produto.preco,
+      quantidade: 1,
+    });
+    setAdicionado(true);
+    setTimeout(() => setAdicionado(false), 1500);
+  }
 
   return (
     <li className="flex flex-col rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
@@ -61,27 +67,14 @@ function ProdutoCard({ produto }: { produto: Produto }) {
         <span className="text-lg font-semibold">{formatBRL(produto.preco)}</span>
         <span className="text-xs text-zinc-500">{produto.quantidadeEstoque} em estoque</span>
       </div>
-      {token === null ? (
-        <button
-          type="button"
-          onClick={() => router.push("/login")}
-          className="mt-4 rounded-md border border-black/15 px-4 py-2 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          Entre para comprar
-        </button>
-      ) : (
-        <button
-          type="button"
-          disabled={semEstoque || comprar.isPending}
-          onClick={() => comprar.mutate()}
-          className="mt-4 rounded-md bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-60"
-        >
-          {semEstoque ? "Sem estoque" : comprar.isPending ? "Criando pedido…" : "Comprar"}
-        </button>
-      )}
-      {comprar.isError && (
-        <p className="mt-2 text-sm text-red-600">Não foi possível criar o pedido.</p>
-      )}
+      <button
+        type="button"
+        disabled={semEstoque}
+        onClick={aoAdicionar}
+        className="mt-4 rounded-md bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-60"
+      >
+        {semEstoque ? "Sem estoque" : adicionado ? "Adicionado ✓" : "Adicionar ao carrinho"}
+      </button>
     </li>
   );
 }

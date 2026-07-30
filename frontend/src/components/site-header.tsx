@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 
+import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/lib/auth/context";
 
 export function SiteHeader() {
   const { token, carregando, sair } = useAuth();
+  const { quantidade } = useCart();
 
   return (
     <header className="border-b border-black/10 bg-white/60 dark:border-white/10 dark:bg-black/30">
@@ -16,6 +18,14 @@ export function SiteHeader() {
         <nav className="flex items-center gap-4 text-sm">
           <Link href="/produtos" className="hover:underline">
             Produtos
+          </Link>
+          <Link href="/carrinho" className="hover:underline">
+            Carrinho
+            {quantidade > 0 && (
+              <span className="ml-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-xs text-white">
+                {quantidade}
+              </span>
+            )}
           </Link>
           {!carregando &&
             (token !== null ? (
